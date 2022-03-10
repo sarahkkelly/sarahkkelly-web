@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>UBC Parking Lot Map</title>
+    <meta charset="utf-8" />
+
+    <!-- Leaflet styles and code. Place in the <head></head> element. -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.4.0/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.4.0/dist/leaflet.js"></script>
+
+    <!-- jQuery is a library that simplifies many things in JavaScript.
+	     We'll use it to retrieve data from the web. -->
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+
+    <script src="./p5.min.js"></script>
+    <!-- this should be unnecessary in this code, as we aren't using p5.js... but since I'm showing you the code running in the p5 editor, the editor expects p5.js to be here... otherwise, it gives you a "TypeError: window.p5 is undefined". We won't use any of p5.js's commands, though! -->
+  </head>
+
+  <body>
+    <div id="mapid" style="width: 1000px; height: 600px;"></div>
+    <!-- Our web map will get placed into this div element -->
+
+    <div id="controls" style="margin: 15px;">
+      <button id="showAllParkingLots">Show All Parking Lots</button>
+
+      <span style="display:inline-block; width: 30px"></span>
+      <input type="text" id="highlightParkingTextEntry" placeholder="Parking lot name" />
+      <button id="highlightParkingButton">Search</button>
+
+    </div>
+
+    <script>
+      // Make a Leaflet map with L.map().
+      // Store the map in the variable 'map'.
+      // "mapid" is the 'id' of the DOM element to contain the map.
+      var map = L.map('mapid', {
+          center: [49.265637, -123.256113],
+          zoom: 15
+        } // this object holds map options
+      );
+
+      var topoTiles = L.tileLayer(
+        'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+          maxZoom: 17,
+          attribution: 'Map data: &copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
+        }
+      ).addTo(map);
+
+
+      function onEachParkingLot(feature, layer) {
+          // does this parking lot have a property named FAC_DESCRIPTION?
+           if (feature.properties && feature.properties.FAC_DESCRIPTION) {
+              layer.bindTooltip(feature.properties.FAC_DESCRIPTION);
+           }
+        }
+
+
+      function parkingToFilter(feature, layer) {
+        if (lotsToHighlight === "") {
+          return true;
+          // In this case, we're not highlighting anything, so draw everything.
+        } else if (feature.properties && feature.properties.FAC_DESCRIPTION) {
+          // We just checked to make sure there are properties to avoid an error
+          //   by asking for the .FAC_DESCRIPTION when there are no properties.
+          // Now, we need to check to see if the .FAC_DESCRIPTION *includes* the search string we're
+          //   trying to highlight.
+          return feature.properties.FAC_DESCRIPTION.toLowerCase().includes(lotsToHighlight.toLowerCase());
+          // We ignore uppercase/lowercase differences.
+        } else {
+          return false;
+          // This is for features that lack properties.
+          // Don't display them.
+        }
+      }
+
+      var lastLayerAdded = {};
+
+      function addParkingLots() {
+        if (map.hasLayer(lastLayerAdded)) {
+          map.removeLayer(lastLayerAdded);
+        }
+        lastLayerAdded = L.geoJSON(parkingGeoJSONdata,
+                                   {style: {color: "#000",
+                                     opacity: 1,
+                                     weight: 2,
+                                     fillColor: "#205099",
+                                     fillOpacity: 1},
+          onEachFeature: onEachParkingLot,
+          filter: parkingToFilter
+        });
+        lastLayerAdded.addTo(map);
+      };
+
+      var lotsToHighlight = "";
+      // This is set by someone pressing the highlight button.
+      // If it's an empty string, then just draw everything.
+
+      function highlightParking() {
+        lotsToHighlight = document
+          .getElementById("highlightParkingTextEntry")
+          .value;
+        addParkingLots();
+        lotsToHighlight = ""; // reset so that "Show Parking Lots" works.
+      }
+
+      var parkingGeoJSONdata;
+
+      $.getJSON("https://raw.githubusercontent.com/UBCGeodata/ubcv-parking/master/geojson/ubcv_parking_www_poly.geojson",
+        function(data){
+                  // store data for later:
+                  parkingGeoJSONdata = data;
+                  // Create event listener for ShowAllParkingLots Button:
+      			  document
+                      .getElementById("showAllParkingLots")
+                      .addEventListener("click", addParkingLots);
+
+                document
+                      .getElementById("highlightParkingButton")
+                      .addEventListener("click", highlightParking);
+        					}
+        );
+
+    </script>
+  </body>
+</html>
