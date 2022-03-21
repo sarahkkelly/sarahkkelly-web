@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang='en'>
+
+<head>
+  <meta charset='utf-8' />
+  <title>Vancouver Cycling Map</title>
+  <meta name='viewport' content='width=device-width, initial-scale=1' />
+  <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.js'></script>
+  <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css' rel='stylesheet' />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+    }
+    .map-overlay {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      background: #fff;
+      margin-bottom: 40px;
+      margin-right: 1100px;
+      font-family: Arial, sans-serif;
+      overflow: auto;
+      border-radius: 3px;
+    }
+    #features {
+      top: 0;
+      height: 200px;
+      margin-top: 20px;
+      margin-left: 10px
+      width: 1200px;
+      padding: 10px;
+
+
+    }
+    #legend {
+    padding: 20px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    line-height: 18px;
+    height: 80px;
+    margin-bottom: 40px;
+    margin-right: 1200px;
+    width: 180px;
+    }
+    .legend-key {
+    display: inline-block;
+    border-radius: 20%;
+    width: 10px;
+    height: 10px;
+    margin-right: 5px;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div id='map'></div>
+  <div class="map-overlay" id="features">
+    <h2>Vancouver Cycling Map</h2>
+    <div id="bl"><p>Explore bike lanes and cycling accidents</p></div>
+  <div class="map-overlay" id="legend"></div>
+
+  <script>
+    mapboxgl.accessToken = 'pk.eyJ1Ijoic2trZWxseSIsImEiOiJjbDB3cTB4M3UwMGZ3M2RwbHY0cHdpY3hoIn0.bGQX9ZDYiczjN-Z3t7Fmkg';
+    const map = new mapboxgl.Map({
+      container: 'map', // Specify the container ID
+      style: 'mapbox://styles/mapbox/light-v10', // Specify which map style to use
+      center: [-123.1030, 49.2508], // Specify the starting position [lng, lat]
+      zoom: 11 // Specify the starting zoom
+    });
+
+    map.on('load', () => {
+
+      const layers = [
+        'Protected Bike Lanes',
+        'Painted Lanes',
+        'Local Street',
+        'Shared Lanes'
+        ];
+        const colors = [
+        '#08af43',
+        '#f4ca10',
+        '#8dddc8',
+        '#be5237'
+        ];
+
+      // create legend
+      const legend = document.getElementById('legend');
+
+      layers.forEach((layer, i) => {
+        const color = colors[i];
+        const item = document.createElement('div');
+        const key = document.createElement('span');
+        key.className = 'legend-key';
+        key.style.backgroundColor = color;
+
+        const value = document.createElement('span');
+        value.innerHTML = `${layer}`;
+        item.appendChild(key);
+        item.appendChild(value);
+        legend.appendChild(item);
+      });
+
+
+
+        map.addSource('bikecrashes', {
+          type: 'geojson',
+          // URL to geojson data stored on GitHub
+          data: 'https://raw.githubusercontent.com/sarahkkelly/sarahkkelly-web/gh-pages/bikecrashes.geojson'
+        });
+
+        map.addLayer(
+          {
+          'id': 'crashes-heat',
+          'type': 'heatmap',
+          'source': 'bikecrashes',
+          'maxzoom': 15,
+          'paint': {
+            'heatmap-weight': 1,
+            // increase intensity as zoom level increases
+            'heatmap-intensity': {
+              'stops': [
+              [11, 1],
+              [15, 3]
+              ]
+            },
+            // use sequential color palette to use exponentially as the weight increases
+            'heatmap-color': [
+            'interpolate',
+            ['linear'],
+            ['heatmap-density'],
+            0,
+            'rgba(33,102,172,0)',
+            0.2,
+            'rgb(103,169,207)',
+            0.4,
+            'rgb(209,229,240)',
+            0.6,
+            'rgb(253,219,199)',
+            0.8,
+            'rgb(239,138,98)',
+            1,
+            'rgb(178,24,43)'
+            ],
+
+
+            // increase radius as zoom increases
+            'heatmap-radius': {
+              'stops': [
+              [11, 8],
+              [15, 12]
+              ]
+            },
+            // decrease opacity to transition into the circle layer
+            'heatmap-opacity': {
+              'default': 0.8,
+              'stops': [
+              [13, 0.8],
+              [14, 0]
+              ]
+            }
+          }
+        });
+
+
+        // now add bike lane data to the map
+        //map.addLayer({
+          //'id': 'bikecrashes-layer',
+          //'type': 'circle',
+          //'source': 'bikecrashes',
+          //'paint': {
+            //'circle-color': '#000000',
+            //'circle-radius': 2}
+
+            map.addLayer(
+              {
+                id: 'crashes-point',
+                type: 'circle',
+                source: 'bikecrashes',
+                minzoom: 11,
+                paint: {
+                  // increase the radius of the circle as the zoom level and dbh value increases
+                  'circle-radius': {
+                    property: 'dbh',
+                    type: 'exponential',
+                    stops: [
+                      [{ zoom: 15, value: 1 }, 5],
+                      [{ zoom: 22, value: 1 }, 20]
+
+                    ]
+                  },
+                  'circle-color': 'red',
+
+                        'circle-opacity': {
+                              stops: [
+                                [13, 0],
+                                [14, 1]
+                              ]
+                            }
+                          }
+                        });
+
+
+
+
+
+                  map.on('click', 'crashes-point', (event) => {
+                      new mapboxgl.Popup()
+                      .setLngLat(event.features[0].geometry.coordinates)
+                      .setHTML(`<strong>Crash Location:</strong> ${event.features[0].properties.Road_location_description}<p>
+                                <strong>Crash Severity:</strong> ${event.features[0].properties.Crash_severity}<p>
+                                <strong>Total Victims:</strong> ${event.features[0].properties.Total_victims}<p>
+                                <strong>Time Category:</strong> ${event.features[0].properties.Time_category}<p>
+                                <strong>Day of Week:</strong> ${event.features[0].properties.Day_of_week}<p>
+                                <strong>Month:</strong> ${event.features[0].properties.Month_of_year}<p>
+                                <strong>Year:</strong> ${event.features[0].properties.Date_of_loss_year}`)
+                      .addTo(map);
+});
+
+map.addSource('bikelanes', {
+  type: 'geojson',
+  // URL to geojson data stored on GitHub
+  data: 'https://raw.githubusercontent.com/sarahkkelly/sarahkkelly-web/gh-pages/bikeways.geojson'
+});
+
+// now add bike lane data to the map
+map.addLayer({
+'id': 'bikelanes-layer',
+'type': 'line',
+'source': 'bikelanes',
+'paint': {
+    'line-width': 2,
+    'line-color': [
+        'match', //colour lines by bikeway type using match expression
+        ['get', 'bikeway_type'],
+        'Protected Bike Lanes',
+        '#08af43',
+        'Painted Lanes',
+        '#f4ca10',
+        'Local Street',
+        '#8dddc8',
+        'Shared Lanes',
+        '#be5237',
+        /* other */ '#000000'
+    ]
+  }
+});
+
+
+      });
+
+  </script>
+
+</body>
+</html>
