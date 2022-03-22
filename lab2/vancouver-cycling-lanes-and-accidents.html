@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang='en'>
+
+<head>
+  <meta charset='utf-8' />
+  <title>Vancouver Bike Lanes & Cycling Accidents</title>
+  <meta name='viewport' content='width=device-width, initial-scale=1' />
+  <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.js'></script>
+  <script src='https://api.mapbox.com/mapbox.js/plugins/turf/v3.0.11/turf.min.js'></script>
+  <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css' rel='stylesheet' />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    #map {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 100%;
+    }
+
+    /* set properties for title and filter box */
+    .map-overlay {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      background: rgb(255, 255, 255);
+      margin-bottom: 40px;
+      margin-left: 20px;
+      margin-right: 1120px;
+      font-family: Arial, sans-serif;
+			font-size: 13px;
+      overflow: auto;
+      border-radius: 3px;
+    }
+
+    #features {
+      top: 0;
+      height: 430px;
+      margin-top: 20px;
+      margin-left: 10px;
+      width: 270px;
+      padding: 10px;
+    }
+
+    /* set properties for legend box */
+    #legend {
+    padding: 20px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+    line-height: 18px;
+    height: 110px;
+    margin-top: 440px;
+  	margin-right: 1160px;
+    width: 180px;
+    }
+    .legend-key {
+    display: inline-block;
+    border-radius: 10%;
+    width: 20px;
+    height: 5px;
+    margin-right: 5px;
+    }
+
+  </style>
+</head>
+<body>
+  <div id='map'></div>
+  <div class="map-overlay" id="legend">
+    <strong>Bike Lane Type</strong><p></p>
+  </div>
+  <div class="map-overlay" id="features">
+    <h3>Vancouver Bike Lanes & Cycling Accidents</h3>
+    <div id="bl">
+      <p>Analyze Vancouver cycling accidents from 2016-2020. Filter cycling accidents by time and day using the buttons below. Zoom in and click on a circle marker to get details of an accident or lick on a bike lane to learn more about the route. All cycling accidents shown involved a car and resulted in a claim.</p>
+    </div>
+    <div class='session'>
+      <strong>Time of Day</strong>
+      <div class='row' id='hour-filter'>
+        <p>
+        <input id='all' type='radio' name='toggle' value='all' checked='checked'>
+        <label for='all'>All</label>
+        </p>
+        </<p>
+        <input id='12AM - 3AM' type='radio' name='toggle' value='12AM - 3AM'>
+      	<label for='12AM - 3AM'>12AM - 3AM</label>
+        <input id='3AM - 6AM' type='radio' name='toggle' value='3AM - 6AM'>
+        <label for='3AM - 6AM'>3AM - 6AM</label>
+        </p>
+        </<p>
+        <input id='6AM - 9AM' type='radio' name='toggle' value='6AM - 9AM'>
+        <label for='6AM - 9AM'>6AM - 9AM</label>
+        <input id='9AM - 12PM' type='radio' name='toggle' value='9AM - 12PM'>
+        <label for='9AM - 12PM'>9AM - 12PM</label>
+        </p>
+        </<p>
+        <input id='12PM - 3PM' type='radio' name='toggle' value='12PM - 3PM'>
+        <label for='12PM - 3PM'>12PM - 3PM</label>
+        <input id='3PM - 6PM' type='radio' name='toggle' value='3PM - 6PM'>
+        <label for='3PM - 6PM'>3PM - 6PM</label>
+        </p>
+        <input id='6PM - 9PM' type='radio' name='toggle' value='6PM - 9PM'>
+        <label for='6PM - 9PM'>6PM - 9PM</label>
+        <input id='9PM - 12AM' type='radio' name='toggle' value='9PM - 12AM'>
+        <label for='9PM - 12AM'>9PM - 12AM</label>
+      </div>
+    </div>
+    <div class='session'>
+      <p>
+      <strong>Day of the week</strong></p>
+      <div class='row' id='day-filter'>
+        <input id='all' type='radio' name='toggle2' value='all' checked='checked'>
+        <label for='all'>All</label>
+        <input id='weekday' type='radio' name='toggle2' value='weekday'>
+        <label for='weekday'>Weekday</label>
+        <input id='weekend' type='radio' name='toggle2' value='weekend'>
+        <label for='weekend'>Weekend</label>
+      </div>
+
+
+      <script>
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2trZWxseSIsImEiOiJjbDB3cTB4M3UwMGZ3M2RwbHY0cHdpY3hoIn0.bGQX9ZDYiczjN-Z3t7Fmkg';
+        const map = new mapboxgl.Map({
+          container: 'map', // Specify the container ID
+          style: 'mapbox://styles/mapbox/light-v10', // Specify which map style to use
+          center: [-123.156870, 49.257875], // Specify the starting position [lng, lat]
+          zoom: 11.2 // Specify the starting zoom
+        });
+
+        map.on('load', () => {
+
+          // define variables for filter buttons
+          var filterTime = ['!=', ['string', ['get', 'Time_category']], 'placeholder'];
+          var filterDay = ['!=', ['string', ['get', 'Day_of_week']], 'placeholder'];
+
+          // define properties for legend
+          const layers = [
+            'Protected Bike Lanes',
+            'Painted Lanes',
+            'Local Street',
+            'Shared Lanes'
+          ];
+          const colors = [
+            '#068432',
+            '#1e4ba4',
+            '#808080',
+            '#b34d4d'
+          ];
+
+          // create legend
+          const legend = document.getElementById('legend');
+
+          layers.forEach((layer, i) => {
+            const color = colors[i];
+            const item = document.createElement('div');
+            const key = document.createElement('span');
+            key.className = 'legend-key';
+            key.style.backgroundColor = color;
+
+            const value = document.createElement('span');
+            value.innerHTML = `${layer}`;
+            item.appendChild(key);
+            item.appendChild(value);
+            legend.appendChild(item);
+          });
+
+
+          // bike crash data source
+          map.addSource('bikecrashes', {
+            type: 'geojson',
+            // URL to geojson data stored on GitHub, data originally obtained from ICBC public data
+            data: 'https://raw.githubusercontent.com/sarahkkelly/sarahkkelly-web/gh-pages/bikecrashes.geojson',
+          });
+
+            // add bike crash heat map layer
+            map.addLayer(
+              {
+              'id': 'crashes-heat',
+              'type': 'heatmap',
+              'source': 'bikecrashes',
+              'minzoom': 10,
+              'maxzoom': 13.5, // heatmap ends, transision to point crash layer
+              'paint': {
+                'heatmap-weight': 1,
+                // increase intensity as zoom level increases
+                'heatmap-intensity': {
+                  'stops': [
+                  [11, 1],
+                  [13.5, 3]
+                  ]
+                },
+                // use sequential color palette to use exponentially as the weight increases
+                'heatmap-color': [
+                'interpolate',
+                ['linear'],
+                ['heatmap-density'],
+                0,
+                'rgba(33,102,172,0)',
+                0.2,
+                'rgb(213,182,103)',
+                0.4,
+                'rgb(205,167,78)',
+                0.6,
+                'rgb(205,140,78)',
+                0.8,
+                'rgb(205,113,78)',
+                1,
+                'rgb(205,84,78)'
+                ],
+
+                // increase radius as zoom increases
+                'heatmap-radius': {
+                  'stops': [
+                  [11, 8],
+                  [13.5, 12]
+                  ]
+                },
+
+                // set opacity
+                'heatmap-opacity': {
+                  'default': 0.7,
+                  'stops': [
+                  [13, 0.7],
+                  [13.5, 0]
+                  ]
+                }
+              }
+            });
+
+            // define filter buttons by time category
+          document.getElementById('hour-filter').addEventListener('change', (event) => {
+            const time = event.target.value;
+            // update the map filter
+            if (time === 'all') {
+              filterTime = ['!=', ['string', ['get', 'Time_category']], 'placeholder'];
+            } else if (time === '12AM - 3AM') {
+              filterTime = ['match', ['get', 'Time_category'], ['00:00-02:59'], true, false];
+            } else if (time === '3AM - 6AM') {
+              filterTime = ['match', ['get', 'Time_category'], ['03:00-05:59'], true, false];
+            } else if (time === '6AM - 9AM') {
+              filterTime = ['match', ['get', 'Time_category'], ['06:00-08:59'], true, false];
+            } else if (time === '9AM - 12PM') {
+              filterTime = ['match', ['get', 'Time_category'], ['09:00-11:59'], true, false];
+            } else if (time === '12PM - 3PM') {
+              filterTime = ['match', ['get', 'Time_category'], ['12:00-14:59'], true, false];
+            } else if (time === '3PM - 6PM') {
+              filterTime = ['match', ['get', 'Time_category'], ['15:00-17:59'], true, false];
+            } else if (time === '6PM - 9PM') {
+              filterTime = ['match', ['get', 'Time_category'], ['18:00-20:59'], true, false];
+            } else if (time === '9PM - 12AM') {
+              filterTime = ['match', ['get', 'Time_category'], ['21:00-23:59'], true, false];
+            } else {
+              console.log('error');
+            }
+            map.setFilter('crashes-heat', ['all', filterTime, filterDay]); // apply filter to heat map layer
+            map.setFilter('crashes-point', ['all', filterTime, filterDay]); // apply filter to point layer
+          });
+
+          // define filter buttons by day of week
+          document.getElementById('day-filter').addEventListener('change', (event) => {
+            const day = event.target.value;
+            // update the map filter
+            if (day === 'all') {
+              filterDay = ['!=', ['string', ['get', 'Day_of_week']], 'placeholder'];
+            } else if (day === 'weekday') {
+              filterDay = ['match', ['get', 'Day_of_week'], ['SATURDAY', 'SUNDAY'], false, true];
+            } else if (day === 'weekend') {
+              filterDay = ['match', ['get', 'Day_of_week'], ['SATURDAY', 'SUNDAY'], true, false];
+            } else {
+              console.log('error');
+            }
+            map.setFilter('crashes-heat', ['all', filterTime, filterDay]); // apply filter to heat map layer
+            map.setFilter('crashes-point', ['all', filterTime, filterDay]); // apply filter to point layer
+          });
+
+          // add bike lane data source
+          map.addSource('bikelanes', {
+            type: 'geojson',
+            // URL to geojson data stored on GitHub, data downloaded from City of Vancouver Open Data Portal
+            data: 'https://raw.githubusercontent.com/sarahkkelly/sarahkkelly-web/gh-pages/bikeways.geojson'
+          });
+
+          // Adding a bike lane layer with a white line color and a line width that is slightly wider than the colored bike lane layer.
+          // This layer is placed behind the colored bike lane layer, visible only on the edges of the lines to create a 'halo' effect on
+          // the bike lanes so that they are easier to see on top of the heatmap.
+          map.addLayer({
+            'id': 'bikelanes-layer-white',
+            'type': 'line',
+            'source': 'bikelanes',
+            'minzoom': 10,
+            'paint': {
+              'line-width':{ // set line width to increase with zoom, width is 0.15 wider than the colored bike lane width
+							'stops': [
+								[11, 1.85],
+								[22, 3.85]
+							]},
+              'line-color': [
+                'match', // color lines white
+                ['get', 'bikeway_type'],
+                'Protected Bike Lanes',
+                '#ffffff',
+                'Painted Lanes',
+                '#ffffff',
+                'Local Street',
+                '#ffffff',
+                'Shared Lanes',
+                '#ffffff',
+                '#ffffff'
+              ]
+            }
+          });
+
+          // Add bike lane data to the map. This is the main bike lane layer that has lines colored by bike lane type.
+          map.addLayer({
+            'id': 'bikelanes-layer',
+            'type': 'line',
+            'source': 'bikelanes',
+            'minzoom': 10,
+            'paint': {
+              'line-width':{ // set line width to increase with zoom
+							'stops': [
+								[11, 1.7],
+								[22, 3.7]
+							]},
+              'line-color': [
+                'match', // colour lines by bike lane type using match expression
+                ['get', 'bikeway_type'],
+                'Protected Bike Lanes',
+                '#068432',
+                'Painted Lanes',
+                '#1e4ba4',
+                'Local Street',
+                '#808080',
+                'Shared Lanes',
+                '#b34d4d',
+                '#000000'
+              ]
+            }
+          });
+
+          // add bike crash point layer, which will represent crashes after zooming in
+          map.addLayer(
+            {
+              id: 'crashes-point',
+              type: 'circle',
+              source: 'bikecrashes',
+              minzoom: 13, // start at this zoom so that circles do not show while heat map in on
+              paint: {
+
+                // circle radius increases with zoom
+                'circle-radius': {
+                  'type': 'exponential',
+                  'stops': [
+                    [11, 1.5],
+                    [22, 15]
+                  ]
+                },
+                // set circle color and opacity
+                'circle-color': 'rgb(205,113,71)',
+								'circle-opacity' : 1,
+
+              },
+              'filter': ['all', filterTime, filterDay]
+            });
+
+          // Add a second bike lane layer, with transparent symbology and a thicker line width than the other bike lane layer.
+          // This layer is used to apply pop-ups to the bike lanes. Applying the popups to a thicker line makes it easier to
+          // click on a line, without visually increasing the line thickness.
+					map.addLayer({
+            'id': 'bikelanes-transparent',
+            'type': 'line',
+            'source': 'bikelanes',
+            'minzoom': 10,
+            'paint': {
+              'line-width': 5,
+							'line-opacity': 0
+            }
+          });
+
+          // add pop-ups to include details about bike accidents
+          map.on('click', 'crashes-point', (event) => {
+            new mapboxgl.Popup()
+              .setLngLat(event.features[0].geometry.coordinates)
+              .setHTML(`<strong>Crash Location:</strong> ${event.features[0].properties.Road_location_description}<p>
+                                <strong>Crash Severity:</strong> ${event.features[0].properties.Crash_severity}<p>
+                                <strong>Total Victims:</strong> ${event.features[0].properties.Total_victims}<p>
+                                <strong>Time Category:</strong> ${event.features[0].properties.Time_category}<p>
+                                <strong>Day of Week:</strong> ${event.features[0].properties.Day_of_week}<p>
+                                <strong>Month:</strong> ${event.features[0].properties.Month_of_year}<p>
+                                <strong>Year:</strong> ${event.features[0].properties.Date_of_loss_year}`)
+              .addTo(map);
+          });
+
+          // add pop-ups to include details about bike lanes (via the transparent bike lane layer)
+          map.on('click', 'bikelanes-transparent', (event) => {
+            new mapboxgl.Popup()
+              .setLngLat(event.lngLat)
+              .setHTML(`<strong>Street Name:</strong> ${event.features[0].properties.street_name}<p>
+                                <strong>Bike Route Name:</strong> ${event.features[0].properties.bike_route_name}<p>
+                                <strong>Bike Lane Type:</strong> ${event.features[0].properties.e_s_bound_type}<p>
+                                <strong>Surface Type:</strong> ${event.features[0].properties.surface_type}`)
+              .addTo(map);
+          });
+        });
+      </script>
+</body>
+</html>
