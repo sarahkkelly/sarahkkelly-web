@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang='en'>
+  <head>
+    <meta charset='utf-8' />
+    <title>Points on a map</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1' />
+    <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.js'></script>
+    <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v2.6.1/mapbox-gl.css' rel='stylesheet' />
+
+    <style>
+
+      <style>
+        body {
+        margin: 0;
+        padding: 0;
+        }
+        #map {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 100%;
+
+          margin: 0;
+          padding: 0;
+        }
+
+        h2,
+        h3 {
+          margin: 10px;
+          font-size: 18px;
+        }
+
+        h3 {
+          font-size: 16px;
+        }
+
+        p {
+          margin: 10px;
+        }
+
+        /**
+        * Create a position for the map
+        * on the page */
+        #map {
+          position: absolute;
+          top: 0;
+          bottom: 0;
+          width: 100%;
+        }
+
+        /**
+        * Set rules for how the map overlays
+        * (information box and legend) will be displayed
+        * on the page. */
+        .map-overlay {
+          position: absolute;
+          bottom: 0;
+          right: 0;
+          background: #fff;
+          margin-right: 20px;
+          font-family: Arial, sans-serif;
+          overflow: auto;
+          border-radius: 3px;
+        }
+
+        #features {
+          top: 0;
+          height: 100px;
+          margin-top: 10px;
+          margin-right: 40px;
+          width: 300px;
+        }
+      </style>
+      </head>
+      <body>
+      <div id='map'></div>
+      <div class='map-overlay' id='features'><h2>Box Office Sales Per Country for the Hunger Games Movie</h2>
+      <div id='pd'><p>Click on a location for more information</p></div></div></div>
+
+    </style>
+  </head>
+
+    <script>
+    // The value for 'accessToken' begins with 'pk...'
+    mapboxgl.accessToken = 'pk.eyJ1IjoiYXJ1bWFuZXIiLCJhIjoiY2wwMnJ4c2l1MGdiczNibHVuZXhocXVzOSJ9.fXvKAUuWQp0KH8CG3rQSLw';
+    const map = new mapboxgl.Map({
+      container: 'map',
+      // Replace YOUR_STYLE_URL with your style URL.
+      style: 'mapbox://styles/arumaner/cl1zpplra000114pifkr0n9q8',
+      center: [41.335889, 3.825528],
+      zoom: 1
+
+
+    });
+
+
+    /*
+    Add an event listener that runs
+      when a user clicks on the map element.
+    */
+    map.on('click', (event) => {
+      // If the user clicked on one of your markers, get its information.
+      const features = map.queryRenderedFeatures(event.point, {
+        layers: ['hungergamessales'] // replace with your layer name
+      });
+
+      if (!features.length) {
+        return;
+      }
+      const feature = features[0];
+
+
+
+
+      /*
+      Create a popup, specify its options
+      and properties, and add it to the map.
+
+      //title,longitude,latitude,description,address,meal cost,signups requred signup requred
+    */
+  const popup = new mapboxgl.Popup({ offset: [0, -15] })
+    .setLngLat(feature.geometry.coordinates)
+    .setHTML(
+      `<h3>${feature.properties.title}</h3><p>${feature.properties.description}</p>`
+    )
+    .addTo(map);
+    });
+
+    map.on('mouseleave', (event) => {
+      map.getCanvas().style.cursor = '';
+      popup.remove();
+
+});
+map.addControl(new mapboxgl.NavigationControl());
+    </script>
+  </body>
+</html>
